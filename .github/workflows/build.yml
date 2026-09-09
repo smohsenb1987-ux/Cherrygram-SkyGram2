@@ -2,9 +2,6 @@ name: Build Cherrygram SkyGram
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
 
 jobs:
   build:
@@ -12,112 +9,313 @@ jobs:
 
     steps:
 
-      - name: Clone Cherrygram source
+      # ============================================
+      # 1 - دریافت نسخه مناسب Cherrygram
+      # ============================================
+      - name: Clone Cherrygram
         run: |
-          git clone --depth 1 https://github.com/arsLan4k1390/Cherrygram.git cherrygram
+          git clone \
+            --depth 1 \
+            --branch main_Reproducible_Builds \
+            --recurse-submodules \
+            https://github.com/arsLan4k1390/Cherrygram.git \
+            cherrygram
+
           cd cherrygram
+
           git submodule sync --recursive
           git submodule update --init --recursive
 
-      - name: Set up Java 17
+          echo "================================"
+          echo "Cherrygram source ready"
+          echo "================================"
+
+          git branch --show-current
+          git rev-parse HEAD
+          git submodule status --recursive
+
+
+      # ============================================
+      # 2 - Java 17
+      # ============================================
+      - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: '17'
 
-      - name: Set up Android SDK
+
+      # ============================================
+      # 3 - Android SDK
+      # ============================================
+      - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+
+      # ============================================
+      # 4 - Android / NDK / CMake
+      # ============================================
       - name: Install Android dependencies
         run: |
-          sdkmanager "platform-tools" \
+          yes | sdkmanager --licenses || true
+
+          sdkmanager \
+            "platform-tools" \
             "platforms;android-36" \
             "build-tools;36.0.0" \
-            "ndk;27.2.12479018" \
-            "cmake;3.22.1"
+            "cmake;3.22.1" \
+            "ndk;27.2.12479018"
 
-      - name: Apply SkyGram UI changes
+
+      # ============================================
+      # 5 - بررسی Native Source
+      # ============================================
+      - name: Check native source
         working-directory: cherrygram
         run: |
-          python3 - <<'PY'
+          echo "===== JNI ====="
+          ls -la TMessagesProj/jni
+
+          echo "===== CMAKE ====="
+
+          if [ -f TMessagesProj/jni/CMakeLists.txt ]; then
+            echo "CMakeLists.txt OK"
+          else
+            echo "CMakeLists.txt missing"
+            exit 1
+          fi
+
+          echo "===== SUBMODULES ====="
+          git submodule status --recursive
+
+
+      # ============================================
+      # 6 - اعمال تنظیمات SkyGram / iOS
+      # ============================================
+      - name: Apply SkyGram UI
+        working-directory: cherrygram
+        shell: bash
+        run: |
+
+          python3 <<'PY'
+
           from pathlib import Path
 
-          def replace_if_found(path, old, new):
-              p = Path(path)
+          # ==================================================
+          # CherrygramChatsConfig.kt
+          # فعال کردن قابلیت‌های iOS
+          # ==================================================
 
-              if not p.exists():
-                  print("SKIP file:", path)
-                  return
+          p = Path(
+              "TMessagesProj/src/main/java/"
+              "org/telegram/ui/Components/"
+              "config/CherrygramChatsConfig.kt"
+          )
+
+          if not p.exists():
+              candidates = list(
+                  Path("TMessagesProj/src/main/java").rglob(
+                      "CherrygramChatsConfig.kt"
+                  )
+              )
+
+              if candidates:
+                  p = candidates[0]
+
+          if p.exists():
 
               text = p.read_text()
 
-              if old in text:
-                  p.write_text(text.replace(old, new, 1))
-                  print("OK changed:", path)
-              else:
-                  print("SKIP text not found:", path)
+              text = text.replace(
+                  "iOSMessageInputField = false",
+                  "iOSMessageInputField = true"
+              )
 
-          # Bottom navigation size
-          replace_if_found(
-              "TMessagesProj/src/main/java/org/telegram/ui/DialogsActivity.java",
-              "public static final int MAIN_TABS_HEIGHT = 56;\n    public static final int MAIN_TABS_MARGIN = dp(6);",
-              "public static final int MAIN_TABS_HEIGHT = 60;\n    public static final int MAIN_TABS_MARGIN = dp(8);"
+              text = text.replace(
+                  "centerChatTitle = false",
+                  "centerChatTitle = true"
+              )
+
+              p.write_text(text)
+
+              print("CherrygramChatsConfig updated")
+
+
+          # ==================================================
+          # CherrygramAppearanceConfig.kt
+          # ظاهر iOS / Main Tabs
+          # ==================================================
+
+          candidates = list(
+              Path("TMessagesProj/src/main/java").rglob(
+                  "CherrygramAppearanceConfig.kt"
+              )
           )
 
-          # Glass navigation text
-          replace_if_found(
-              "TMessagesProj/src/main/java/org/telegram/ui/Components/glass/GlassTabView.java",
-              "textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12f);",
-              "textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12f);\n        textView.setIncludeFontPadding(false);"
+          if candidates:
+
+              p = candidates[0]
+              text = p.read_text()
+
+              text = text.replace(
+                  "centerTitle = false",
+                  "centerTitle = true"
+              )
+
+              text = text.replace(
+                  "showMainTabs = false",
+                  "showMainTabs = true"
+              )
+
+              text = text.replace(
+                  "showSearchInTabs = false",
+                  "showSearchInTabs = true"
+              )
+
+              text = text.replace(
+                  "showMainTabsTitle = false",
+                  "showMainTabsTitle = true"
+              )
+
+              p.write_text(text)
+
+              print("CherrygramAppearanceConfig updated")
+
+
+          # ==================================================
+          # DialogsActivity.java
+          # Bottom navigation
+          # ==================================================
+
+          candidates = list(
+              Path("TMessagesProj/src/main/java").rglob(
+                  "DialogsActivity.java"
+              )
           )
 
-          # Selected glass capsule
-          replace_if_found(
-              "TMessagesProj/src/main/java/org/telegram/ui/Components/glass/GlassTabView.java",
-              "Theme.multAlpha(colorSelected, 0.09f * alpha)",
-              "Theme.multAlpha(colorSelected, 0.16f * alpha)"
+          if candidates:
+
+              p = candidates[0]
+              text = p.read_text()
+
+              # ارتفاع Bottom Bar
+              text = text.replace(
+                  "MAIN_TABS_HEIGHT = 56",
+                  "MAIN_TABS_HEIGHT = 60"
+              )
+
+              # فاصله از لبه
+              text = text.replace(
+                  "MAIN_TABS_MARGIN = 6",
+                  "MAIN_TABS_MARGIN = 8"
+              )
+
+              p.write_text(text)
+
+              print("DialogsActivity updated")
+
+
+          # ==================================================
+          # GlassTabView.java
+          # ظاهر Glass / Liquid Glass
+          # ==================================================
+
+          candidates = list(
+              Path("TMessagesProj/src/main/java").rglob(
+                  "GlassTabView.java"
+              )
           )
 
-          # Selected tab scale
-          replace_if_found(
-              "TMessagesProj/src/main/java/org/telegram/ui/Components/glass/GlassTabView.java",
-              "lerp(0.6f, 1, selectedFactor)",
-              "lerp(0.88f, 1, selectedFactor)"
+          if candidates:
+
+              p = candidates[0]
+              text = p.read_text()
+
+              text = text.replace(
+                  "setTextSize(12)",
+                  "setTextSize(12.5f)"
+              )
+
+              p.write_text(text)
+
+              print("GlassTabView updated")
+
+
+          # ==================================================
+          # MainTabsActivity.java
+          # Search Glass button
+          # ==================================================
+
+          candidates = list(
+              Path("TMessagesProj/src/main/java").rglob(
+                  "MainTabsActivity.java"
+              )
           )
 
-          # Wider floating navigation
-          replace_if_found(
-              "TMessagesProj/src/main/java/org/telegram/ui/MainTabsActivity.java",
-              "tabsView.setMaxWidth(dp(328 + DialogsActivity.MAIN_TABS_MARGIN * 2));",
-              "tabsView.setMaxWidth(dp(520 + DialogsActivity.MAIN_TABS_MARGIN * 2));"
-          )
+          if candidates:
 
-          # Smaller side padding
-          replace_if_found(
-              "TMessagesProj/src/main/java/org/telegram/ui/MainTabsActivity.java",
-              "tabsView.setPadding(DialogsActivity.MAIN_TABS_MARGIN + 4, 0, DialogsActivity.MAIN_TABS_MARGIN + 4, 0);",
-              "tabsView.setPadding(DialogsActivity.MAIN_TABS_MARGIN + 2, 0, DialogsActivity.MAIN_TABS_MARGIN + 2, 0);"
-          )
+              p = candidates[0]
+              text = p.read_text()
 
-          # SkyGram-style default tab order
-          replace_if_found(
-              "TMessagesProj/src/main/java/uz/unnarsx/cherrygram/core/configs/CherrygramAppearanceConfig.kt",
-              '"SETTINGS,CHATS,!PROFILE,!CONTACTS,!CALLS,SEARCH"',
-              '"CONTACTS,CALLS,CHATS,SETTINGS,!PROFILE,SEARCH"'
-          )
+              # کمی فاصله بیشتر برای حالت شناور
+              text = text.replace(
+                  "dp(6)",
+                  "dp(8)"
+              )
 
-          print("SkyGram changes finished.")
+              p.write_text(text)
+
+              print("MainTabsActivity updated")
+
+
+          print("========================================")
+          print("SkyGram / iOS UI changes applied")
+          print("========================================")
+
           PY
 
-      - name: Prepare CI environment
+
+      # ============================================
+      # 7 - بررسی اینکه تغییرات واقعاً اعمال شده
+      # ============================================
+      - name: Verify SkyGram changes
+        working-directory: cherrygram
+        run: |
+          echo "===== iOS Message Input ====="
+          grep -R "iOSMessageInputField" TMessagesProj/src/main/java | head -10 || true
+
+          echo "===== Center Chat Title ====="
+          grep -R "centerChatTitle" TMessagesProj/src/main/java | head -10 || true
+
+          echo "===== Glass Tab ====="
+          find TMessagesProj/src/main/java \
+            -name "GlassTabView.java" \
+            -print
+
+          echo "===== Main Tabs ====="
+          find TMessagesProj/src/main/java \
+            -name "MainTabsActivity.java" \
+            -print
+
+
+      # ============================================
+      # 8 - CI files
+      # ============================================
+      - name: Prepare CI
         working-directory: cherrygram
         run: |
           touch secrets_for_ci.env
+          chmod +x gradlew
 
+
+      # ============================================
+      # 9 - ساخت کلید امضا
+      # ============================================
       - name: Create signing key
         working-directory: cherrygram
         run: |
-          keytool -genkeypair -v \
+          keytool -genkeypair \
+            -v \
             -keystore Your_Key.jks \
             -storepass Your_Password \
             -keypass Your_Password \
@@ -125,62 +323,72 @@ jobs:
             -keyalg RSA \
             -keysize 2048 \
             -validity 10000 \
-            -dname "CN=Cherrygram Test"
+            -dname "CN=Cherrygram SkyGram, OU=SkyGram, O=SkyGram, L=Baku, ST=Baku, C=AZ"
 
-      - name: Verify native sources
-        working-directory: cherrygram
-        run: |
-          echo "===== JNI DIRECTORY ====="
-          ls -la TMessagesProj/jni/
+          echo "Signing key created."
 
-          echo "===== CHECK COLORADO ====="
-          if [ -f TMessagesProj/jni/colorado/CMakeLists.txt ]; then
-            echo "Colorado CMakeLists.txt FOUND"
-          else
-            echo "ERROR: Colorado CMakeLists.txt NOT FOUND"
-            exit 1
-          fi
 
+      # ============================================
+      # 10 - Build APK
+      # ============================================
       - name: Build APK
         working-directory: cherrygram
+        shell: bash
         run: |
+
           chmod +x gradlew
-          set +e
-          ./gradlew :TMessagesProj_App:assembleAfatDebug --no-daemon --stacktrace 2>&1 | tee build.log
-          BUILD_EXIT=${PIPESTATUS[0]}
-          echo "Gradle exit code: $BUILD_EXIT"
-          exit $BUILD_EXIT
 
-      - name: Show build log
-        if: always()
-        working-directory: cherrygram
-        run: |
-          echo "===== LAST 200 LINES OF BUILD LOG ====="
-          if [ -f build.log ]; then
-            tail -n 200 build.log
-          else
-            echo "build.log was not created"
-          fi
+          echo "========================================"
+          echo "STARTING CHERRYGRAM SKYGRAM BUILD"
+          echo "========================================"
 
+          set -o pipefail
+
+          ./gradlew \
+            :TMessagesProj_App:assembleAfatDebug \
+            --no-daemon \
+            --stacktrace \
+            2>&1 | tee build.log
+
+
+      # ============================================
+      # 11 - نمایش APKهای ساخته‌شده
+      # ============================================
       - name: Find APK
         if: always()
         working-directory: cherrygram
         run: |
-          echo "===== APK FILES ====="
-          find . -type f -name "*.apk" -print
+          echo "========================================"
+          echo "APK FILES"
+          echo "========================================"
 
+          find . \
+            -type f \
+            -name "*.apk" \
+            -print
+
+
+      # ============================================
+      # 12 - آپلود APK
+      # ============================================
+      - name: Upload SkyGram APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Cherrygram-SkyGram-APK
+          path: |
+            cherrygram/**/build/outputs/apk/**/*.apk
+          if-no-files-found: error
+
+
+      # ============================================
+      # 13 - اگر خطا شد، لاگ را نگه دار
+      # ============================================
       - name: Upload Build Log
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Cherrygram-Build-Log
-          path: cherrygram/build.log
+          path: |
+            cherrygram/build.log
           if-no-files-found: warn
-
-      - name: Upload APK
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Cherrygram-SkyGram-APK
-          path: cherrygram/**/build/outputs/apk/**/*.apk
-          if-no-files-found: error
