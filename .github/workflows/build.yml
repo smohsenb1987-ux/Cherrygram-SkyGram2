@@ -124,5 +124,21 @@ jobs:
             -validity 10000 \
             -dname "CN=Cherrygram Test"
 
-      - name: Build APK
-        working-directory: cherry
+            - name: Build APK
+        working-directory: cherrygram
+        run: |
+          chmod +x gradlew
+          ./gradlew :TMessagesProj_App:assembleAfatDebug --no-daemon --stacktrace
+
+      - name: Find APK
+        working-directory: cherrygram
+        run: |
+          echo "===== APK FILES ====="
+          find . -type f -name "*.apk" -print
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Cherrygram-SkyGram-APK
+          path: cherrygram/**/build/outputs/apk/**/*.apk
+          if-no-files-found: error
