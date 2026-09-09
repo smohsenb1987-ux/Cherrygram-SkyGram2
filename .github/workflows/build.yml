@@ -1,0 +1,75 @@
+name: Build SkyGram-style Cherrygram APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clone Cherrygram source
+        run: |
+          git clone --depth 1 --recurse-submodules https://github.com/arsLan4k1390/Cherrygram.git cherrygram
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: temurin
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android build dependencies
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
+
+      - name: Apply SkyGram-style UI changes
+        working-directory: cherrygram
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace(path, old, new):
+              p = Path(path)
+              s = p.read_text()
+              if old not in s:
+                  raise SystemExit(f"Expected text not found in {path}: {old!r}")
+              p.write_text(s.replace(old, new, 1))
+
+          replace(
+              "TMessagesProj/src/main/java/org/telegram/ui/DialogsActivity.java",
+              "public static final int MAIN_TABS_HEIGHT = 56;\n    public static final int MAIN_TABS_MARGIN = dp(6);",
+              "public static final int MAIN_TABS_HEIGHT = 60;\n    public static final int MAIN_TABS_MARGIN = dp(8);",
+          )
+
+          replace(
+              "TMessagesProj/src/main/java/org/telegram/ui/Components/glass/GlassTabView.java",
+              "textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12f);",
+              "textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12f);\n        textView.setIncludeFontPadding(false);",
+          )
+          replace(
+              "TMessagesProj/src/main/java/org/telegram/ui/Components/glass/GlassTabView.java",
+              "Theme.multAlpha(colorSelected, 0.09f * alpha)",
+              "Theme.multAlpha(colorSelected, 0.16f * alpha)",
+          )
+          replace(
+              "TMessagesProj/src/main/java/org/telegram/ui/Components/glass/GlassTabView.java",
+              "lerp(0.6f, 1, selectedFactor)",
+              "lerp(0.88f, 1, selectedFactor)",
+          )
+
+          replace(
+              "TMessagesProj/src/main/java/org/telegram/ui/MainTabsActivity.java",
+              "tabsView.setPadding(dp(DialogsActivity.MAIN_TABS_MARGIN + 4), dp(DialogsActivity.MAIN_TABS_MARGIN + 4), dp(DialogsActivity.MAIN_TABS_MARGIN + 4), dp(DialogsActivity.MAIN_TABS_MARGIN + 4));",
+              "tabsView.setPadding(dp(DialogsActivity.MAIN_TABS_MARGIN + 2), dp(DialogsActivity.MAIN_TABS_MARGIN + 2), dp(DialogsActivity.MAIN_TABS_MARGIN + 2), dp(DialogsActivity.MAIN_TABS_MARGIN + 2));",
+          )
+          replace(
+              "TMessagesProj/src/main/java/org/telegram/ui/MainTabsActivity.java",
+              "tabsView.setMaxWidth(dp(328 + DialogsActivity.MAIN_TABS_MARGIN * 2));",
+              "tabsView.setMaxWidth(dp(520 + DialogsActivity.MAIN_TABS_MARGIN * 2));",
+          )
