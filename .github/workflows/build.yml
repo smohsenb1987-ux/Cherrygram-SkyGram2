@@ -1,6 +1,6 @@
 name: Build Cherrygram SkyGram
 
-"on":
+on:
   workflow_dispatch:
   push:
     branches:
@@ -124,7 +124,7 @@ jobs:
             -validity 10000 \
             -dname "CN=Cherrygram Test"
 
-            - name: Build APK
+      - name: Build APK
         working-directory: cherrygram
         run: |
           chmod +x gradlew
