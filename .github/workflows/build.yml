@@ -1,9 +1,10 @@
-name: Build SkyGram-style Cherrygram APK
+name: Build Cherrygram SkyGram
 
-on:
+"on":
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches:
+      - main
 
 jobs:
   build:
@@ -17,16 +18,19 @@ jobs:
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
           distribution: temurin
+          java-version: "17"
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android build dependencies
+      - name: Install Android dependencies
         run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
+          sdkmanager "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "ndk;27.2.12479018" \
+            "cmake;3.22.1"
 
       - name: Apply SkyGram-style UI changes
         working-directory: cherrygram
@@ -38,38 +42,87 @@ jobs:
               p = Path(path)
               s = p.read_text()
               if old not in s:
-                  raise SystemExit(f"Expected text not found in {path}: {old!r}")
+                  raise SystemExit(f"Text not found in {path}: {old}")
               p.write_text(s.replace(old, new, 1))
+              print(f"Updated: {path}")
 
+          # Bottom navigation size
           replace(
               "TMessagesProj/src/main/java/org/telegram/ui/DialogsActivity.java",
               "public static final int MAIN_TABS_HEIGHT = 56;\n    public static final int MAIN_TABS_MARGIN = dp(6);",
-              "public static final int MAIN_TABS_HEIGHT = 60;\n    public static final int MAIN_TABS_MARGIN = dp(8);",
+              "public static final int MAIN_TABS_HEIGHT = 60;\n    public static final int MAIN_TABS_MARGIN = dp(8);"
           )
 
+          # Glass tab appearance
           replace(
               "TMessagesProj/src/main/java/org/telegram/ui/Components/glass/GlassTabView.java",
               "textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12f);",
-              "textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12f);\n        textView.setIncludeFontPadding(false);",
+              "textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12f);\n        textView.setIncludeFontPadding(false);"
           )
+
           replace(
               "TMessagesProj/src/main/java/org/telegram/ui/Components/glass/GlassTabView.java",
               "Theme.multAlpha(colorSelected, 0.09f * alpha)",
-              "Theme.multAlpha(colorSelected, 0.16f * alpha)",
+              "Theme.multAlpha(colorSelected, 0.16f * alpha)"
           )
+
           replace(
               "TMessagesProj/src/main/java/org/telegram/ui/Components/glass/GlassTabView.java",
               "lerp(0.6f, 1, selectedFactor)",
-              "lerp(0.88f, 1, selectedFactor)",
+              "lerp(0.88f, 1, selectedFactor)"
+          )
+
+          # Wider floating glass navigation
+          replace(
+              "TMessagesProj/src/main/java/org/telegram/ui/MainTabsActivity.java",
+              "tabsView.setMaxWidth(dp(328 + DialogsActivity.MAIN_TABS_MARGIN * 2));",
+              "tabsView.setMaxWidth(dp(520 + DialogsActivity.MAIN_TABS_MARGIN * 2));"
           )
 
           replace(
               "TMessagesProj/src/main/java/org/telegram/ui/MainTabsActivity.java",
-              "tabsView.setPadding(dp(DialogsActivity.MAIN_TABS_MARGIN + 4), dp(DialogsActivity.MAIN_TABS_MARGIN + 4), dp(DialogsActivity.MAIN_TABS_MARGIN + 4), dp(DialogsActivity.MAIN_TABS_MARGIN + 4));",
-              "tabsView.setPadding(dp(DialogsActivity.MAIN_TABS_MARGIN + 2), dp(DialogsActivity.MAIN_TABS_MARGIN + 2), dp(DialogsActivity.MAIN_TABS_MARGIN + 2), dp(DialogsActivity.MAIN_TABS_MARGIN + 2));",
+              "tabsView.setPadding(DialogsActivity.MAIN_TABS_MARGIN + 4, 0, DialogsActivity.MAIN_TABS_MARGIN + 4, 0);",
+              "tabsView.setPadding(DialogsActivity.MAIN_TABS_MARGIN + 2, 0, DialogsActivity.MAIN_TABS_MARGIN + 2, 0);"
           )
+
+          # SkyGram-style default tab order
           replace(
-              "TMessagesProj/src/main/java/org/telegram/ui/MainTabsActivity.java",
-              "tabsView.setMaxWidth(dp(328 + DialogsActivity.MAIN_TABS_MARGIN * 2));",
-              "tabsView.setMaxWidth(dp(520 + DialogsActivity.MAIN_TABS_MARGIN * 2));",
+              "TMessagesProj/src/main/java/uz/unnarsx/cherrygram/core/configs/CherrygramAppearanceConfig.kt",
+              '"SETTINGS,CHATS,!PROFILE,!CONTACTS,!CALLS,SEARCH"',
+              '"CONTACTS,CALLS,CHATS,SETTINGS,!PROFILE,SEARCH"'
           )
+
+          print("SkyGram UI changes applied successfully.")
+          PY
+
+      - name: Prepare CI environment
+        working-directory: cherrygram
+        run: |
+          touch secrets_for_ci.env
+
+      - name: Create signing key
+        working-directory: cherrygram
+        run: |
+          keytool -genkeypair -v \
+            -keystore Your_Key.jks \
+            -storepass Your_Password \
+            -keypass Your_Password \
+            -alias Your_Alias \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Cherrygram Test"
+
+      - name: Build APK
+        working-directory: cherrygram
+        run: |
+          chmod +x gradlew
+          ./gradlew :TMessagesProj_App:assembleAfatDebug \
+            --no-daemon \
+            --stacktrace
+
+      - name: Find APK
+        working-directory: cherrygram
+        run: |
+          echo "APK files found:"
+          find TMessagesProj_App/build/outputs/apk -type f -name "*.apk 
