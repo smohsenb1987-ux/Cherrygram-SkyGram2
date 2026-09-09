@@ -14,7 +14,10 @@ jobs:
 
       - name: Clone Cherrygram source
         run: |
-          git clone --depth 1 --recurse-submodules https://github.com/arsLan4k1390/Cherrygram.git cherrygram
+          git clone --depth 1 https://github.com/arsLan4k1390/Cherrygram.git cherrygram
+          cd cherrygram
+          git submodule sync --recursive
+          git submodule update --init --recursive
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -54,42 +57,49 @@ jobs:
               else:
                   print("SKIP text not found:", path)
 
+          # Bottom navigation size
           replace_if_found(
               "TMessagesProj/src/main/java/org/telegram/ui/DialogsActivity.java",
               "public static final int MAIN_TABS_HEIGHT = 56;\n    public static final int MAIN_TABS_MARGIN = dp(6);",
               "public static final int MAIN_TABS_HEIGHT = 60;\n    public static final int MAIN_TABS_MARGIN = dp(8);"
           )
 
+          # Glass navigation text
           replace_if_found(
               "TMessagesProj/src/main/java/org/telegram/ui/Components/glass/GlassTabView.java",
               "textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12f);",
               "textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12f);\n        textView.setIncludeFontPadding(false);"
           )
 
+          # Selected glass capsule
           replace_if_found(
               "TMessagesProj/src/main/java/org/telegram/ui/Components/glass/GlassTabView.java",
               "Theme.multAlpha(colorSelected, 0.09f * alpha)",
               "Theme.multAlpha(colorSelected, 0.16f * alpha)"
           )
 
+          # Selected tab scale
           replace_if_found(
               "TMessagesProj/src/main/java/org/telegram/ui/Components/glass/GlassTabView.java",
               "lerp(0.6f, 1, selectedFactor)",
               "lerp(0.88f, 1, selectedFactor)"
           )
 
+          # Wider floating navigation
           replace_if_found(
               "TMessagesProj/src/main/java/org/telegram/ui/MainTabsActivity.java",
               "tabsView.setMaxWidth(dp(328 + DialogsActivity.MAIN_TABS_MARGIN * 2));",
               "tabsView.setMaxWidth(dp(520 + DialogsActivity.MAIN_TABS_MARGIN * 2));"
           )
 
+          # Smaller side padding
           replace_if_found(
               "TMessagesProj/src/main/java/org/telegram/ui/MainTabsActivity.java",
               "tabsView.setPadding(DialogsActivity.MAIN_TABS_MARGIN + 4, 0, DialogsActivity.MAIN_TABS_MARGIN + 4, 0);",
               "tabsView.setPadding(DialogsActivity.MAIN_TABS_MARGIN + 2, 0, DialogsActivity.MAIN_TABS_MARGIN + 2, 0);"
           )
 
+          # SkyGram-style default tab order
           replace_if_found(
               "TMessagesProj/src/main/java/uz/unnarsx/cherrygram/core/configs/CherrygramAppearanceConfig.kt",
               '"SETTINGS,CHATS,!PROFILE,!CONTACTS,!CALLS,SEARCH"',
@@ -117,6 +127,20 @@ jobs:
             -validity 10000 \
             -dname "CN=Cherrygram Test"
 
+      - name: Verify native sources
+        working-directory: cherrygram
+        run: |
+          echo "===== JNI DIRECTORY ====="
+          ls -la TMessagesProj/jni/
+
+          echo "===== CHECK COLORADO ====="
+          if [ -f TMessagesProj/jni/colorado/CMakeLists.txt ]; then
+            echo "Colorado CMakeLists.txt FOUND"
+          else
+            echo "ERROR: Colorado CMakeLists.txt NOT FOUND"
+            exit 1
+          fi
+
       - name: Build APK
         working-directory: cherrygram
         run: |
@@ -127,7 +151,7 @@ jobs:
           echo "Gradle exit code: $BUILD_EXIT"
           exit $BUILD_EXIT
 
-      - name: Show build error
+      - name: Show build log
         if: always()
         working-directory: cherrygram
         run: |
@@ -138,14 +162,6 @@ jobs:
             echo "build.log was not created"
           fi
 
-      - name: Upload build log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Cherrygram-Build-Log
-          path: cherrygram/build.log
-          if-no-files-found: warn
-
       - name: Find APK
         if: always()
         working-directory: cherrygram
@@ -153,10 +169,18 @@ jobs:
           echo "===== APK FILES ====="
           find . -type f -name "*.apk" -print
 
+      - name: Upload Build Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Cherrygram-Build-Log
+          path: cherrygram/build.log
+          if-no-files-found: warn
+
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: Cherrygram-SkyGram-APK
           path: cherrygram/**/build/outputs/apk/**/*.apk
-          if-no-files-found: error 
+          if-no-files-found: error
