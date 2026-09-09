@@ -31,9 +31,9 @@ jobs:
             "platforms;android-36" \
             "build-tools;36.0.0" \
             "ndk;27.2.12479018" \
-            "cmake;3.22.1"
+            "cmake;3.10.2"
 
-      - name: Apply SkyGram-style UI changes
+      - name: Apply SkyGram UI changes
         working-directory: cherrygram
         run: |
           python3 - <<'PY'
@@ -43,60 +43,53 @@ jobs:
               p = Path(path)
 
               if not p.exists():
-                  print(f"SKIP - file not found: {path}")
+                  print("SKIP file:", path)
                   return
 
               text = p.read_text()
 
               if old in text:
                   p.write_text(text.replace(old, new, 1))
-                  print(f"OK - changed: {path}")
+                  print("OK changed:", path)
               else:
-                  print(f"SKIP - text not found: {path}")
+                  print("SKIP text not found:", path)
 
-          # Bottom navigation size
           replace_if_found(
               "TMessagesProj/src/main/java/org/telegram/ui/DialogsActivity.java",
               "public static final int MAIN_TABS_HEIGHT = 56;\n    public static final int MAIN_TABS_MARGIN = dp(6);",
               "public static final int MAIN_TABS_HEIGHT = 60;\n    public static final int MAIN_TABS_MARGIN = dp(8);"
           )
 
-          # Glass navigation text
           replace_if_found(
               "TMessagesProj/src/main/java/org/telegram/ui/Components/glass/GlassTabView.java",
               "textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12f);",
               "textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12f);\n        textView.setIncludeFontPadding(false);"
           )
 
-          # Selected glass capsule
           replace_if_found(
               "TMessagesProj/src/main/java/org/telegram/ui/Components/glass/GlassTabView.java",
               "Theme.multAlpha(colorSelected, 0.09f * alpha)",
               "Theme.multAlpha(colorSelected, 0.16f * alpha)"
           )
 
-          # Selected tab scale
           replace_if_found(
               "TMessagesProj/src/main/java/org/telegram/ui/Components/glass/GlassTabView.java",
               "lerp(0.6f, 1, selectedFactor)",
               "lerp(0.88f, 1, selectedFactor)"
           )
 
-          # Wider floating navigation
           replace_if_found(
               "TMessagesProj/src/main/java/org/telegram/ui/MainTabsActivity.java",
               "tabsView.setMaxWidth(dp(328 + DialogsActivity.MAIN_TABS_MARGIN * 2));",
               "tabsView.setMaxWidth(dp(520 + DialogsActivity.MAIN_TABS_MARGIN * 2));"
           )
 
-          # Smaller side padding
           replace_if_found(
               "TMessagesProj/src/main/java/org/telegram/ui/MainTabsActivity.java",
               "tabsView.setPadding(DialogsActivity.MAIN_TABS_MARGIN + 4, 0, DialogsActivity.MAIN_TABS_MARGIN + 4, 0);",
               "tabsView.setPadding(DialogsActivity.MAIN_TABS_MARGIN + 2, 0, DialogsActivity.MAIN_TABS_MARGIN + 2, 0);"
           )
 
-          # SkyGram-style default tab order
           replace_if_found(
               "TMessagesProj/src/main/java/uz/unnarsx/cherrygram/core/configs/CherrygramAppearanceConfig.kt",
               '"SETTINGS,CHATS,!PROFILE,!CONTACTS,!CALLS,SEARCH"',
@@ -131,14 +124,16 @@ jobs:
           ./gradlew :TMessagesProj_App:assembleAfatDebug --no-daemon --stacktrace
 
       - name: Find APK
+        if: always()
         working-directory: cherrygram
         run: |
           echo "===== APK FILES ====="
           find . -type f -name "*.apk" -print
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: Cherrygram-SkyGram-APK
-          path: cherrygram/**/build/outputs/apk/**/*.apk
+          path: cherrygram/TMessagesProj_App/build/outputs/apk/afat/debug/*.apk
           if-no-files-found: error
