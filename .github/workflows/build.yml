@@ -31,7 +31,7 @@ jobs:
             "platforms;android-36" \
             "build-tools;36.0.0" \
             "ndk;27.2.12479018" \
-            "cmake;3.10.2"
+            "cmake;3.22.1"
 
       - name: Apply SkyGram UI changes
         working-directory: cherrygram
@@ -135,5 +135,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Cherrygram-SkyGram-APK
-          path: cherrygram/TMessagesProj_App/build/outputs/apk/afat/debug/*.apk
-          if-no-files-found: error
+          path: cherrygram/**/build/outputs/apk/**/*.apk
+          if-no-files-found: error 
