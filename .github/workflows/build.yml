@@ -121,7 +121,30 @@ jobs:
         working-directory: cherrygram
         run: |
           chmod +x gradlew
-          ./gradlew :TMessagesProj_App:assembleAfatDebug --no-daemon --stacktrace
+          set +e
+          ./gradlew :TMessagesProj_App:assembleAfatDebug --no-daemon --stacktrace 2>&1 | tee build.log
+          BUILD_EXIT=${PIPESTATUS[0]}
+          echo "Gradle exit code: $BUILD_EXIT"
+          exit $BUILD_EXIT
+
+      - name: Show build error
+        if: always()
+        working-directory: cherrygram
+        run: |
+          echo "===== LAST 200 LINES OF BUILD LOG ====="
+          if [ -f build.log ]; then
+            tail -n 200 build.log
+          else
+            echo "build.log was not created"
+          fi
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Cherrygram-Build-Log
+          path: cherrygram/build.log
+          if-no-files-found: warn
 
       - name: Find APK
         if: always()
